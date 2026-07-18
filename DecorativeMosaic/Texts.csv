@@ -1,0 +1,46 @@
+Key,Parameter,ja-jp,en-us,zh-cn,zh-tw,ko-kr,es-es,ar-sa,id-id
+DecorativeMosaic,,装飾モザイク,Decorative Mosaic,装饰马赛克,裝飾馬賽克,장식 모자이크,Mosaico decorativo,فسيفساء زخرفية,Mosaik Dekoratif
+BasicGroup,,基本,Basic,基本,基本,기본,Básico,أساسي,Dasar
+TileGroup,,タイル,Tile,瓷砖,磁磚,타일,Tesela,البلاط,Ubin
+FlowGroup,,方向,Flow,方向,方向,방향,Dirección,الاتجاه,Arah
+AppearanceGroup,,描画,Appearance,绘制,繪製,묘화,Apariencia,المظهر,Tampilan
+Amount,,強さ,Amount,强度,強度,강도,Intensidad,الشدة,Intensitas
+AmountDescription,,モザイクの合成量です,Blend amount of the mosaic over the source,马赛克与源图像的混合量,馬賽克與源圖像的混合量,모자이크의 합성량입니다,Cantidad de mezcla del mosaico sobre la imagen,مقدار مزج الفسيفساء فوق الصورة,Jumlah pencampuran mosaik di atas citra
+Laying,,敷設,Laying,铺设,鋪設,부설,Colocación,الرصف,Pemasangan
+LayingDescription,,タイルが敷き詰められる進行度です,Progress of the tiles being laid,瓷砖铺设的进度,磁磚鋪設的進度,타일이 깔리는 진행도입니다,Progreso de la colocación de las teselas,مدى تقدم رصف البلاط,Kemajuan pemasangan ubin
+Quality,,品質,Quality,品质,品質,품질,Calidad,الجودة,Kualitas
+QualityDescription,,計算格子の解像度とLloyd反復の回数を選びます,Selects the computation grid resolution and Lloyd iteration counts,选择计算网格分辨率与Lloyd迭代次数,選擇計算網格解析度與Lloyd迭代次數,계산 격자 해상도와 Lloyd 반복 횟수를 선택합니다,Selecciona la resolución de la cuadrícula de cálculo y el número de iteraciones de Lloyd,يحدد دقة شبكة الحساب وعدد تكرارات لويد,Memilih resolusi kisi perhitungan dan jumlah iterasi Lloyd
+TileSize,,大きさ,Size,大小,大小,크기,Tamaño,الحجم,Ukuran
+TileSizeDescription,,タイルの間隔をピクセルで指定します,Spacing of the tiles in pixels,以像素指定瓷砖的间距,以像素指定磁磚的間距,타일의 간격을 픽셀로 지정합니다,Espaciado de las teselas en píxeles,تباعد البلاط بالبكسل,Jarak ubin dalam piksel
+Grout,,目地幅,Grout,砖缝宽度,磚縫寬度,줄눈 폭,Junta,عرض الملاط,Lebar Nat
+GroutDescription,,タイルの間に見える目地の幅です,Width of the grout visible between tiles,瓷砖之间可见砖缝的宽度,磁磚之間可見磚縫的寬度,타일 사이에 보이는 줄눈의 폭입니다,Anchura de la junta visible entre teselas,عرض الملاط الظاهر بين البلاطات,Lebar nat yang terlihat di antara ubin
+Aspect,,細長さ,Aspect,细长度,細長度,세장비,Alargamiento,الاستطالة,Kelonjongan
+AspectDescription,,方向に沿ってタイルを細長くします,Elongates tiles along the direction field,沿方向场拉长瓷砖,沿方向場拉長磁磚,방향을 따라 타일을 가늘고 길게 만듭니다,Alarga las teselas a lo largo del campo de dirección,يطيل البلاط على طول حقل الاتجاه,Memanjangkan ubin sepanjang medan arah
+Irregularity,,乱れ,Irregularity,紊乱,紊亂,흐트러짐,Irregularidad,عدم الانتظام,Ketidakteraturan
+IrregularityDescription,,タイルの大きさと回転の個体差です,Per-tile variation of size and rotation,每块瓷砖大小与旋转的差异,每塊磁磚大小與旋轉的差異,타일마다 크기와 회전의 편차입니다,Variación de tamaño y rotación por tesela,تفاوت الحجم والدوران لكل بلاطة,Variasi ukuran dan rotasi tiap ubin
+Detail,,細部,Detail,细节,細節,세부,Detalle,التفاصيل,Detail
+DetailDescription,,エッジの近くでタイルを小さくします,Uses smaller tiles near edges,在边缘附近使用较小的瓷砖,在邊緣附近使用較小的磁磚,가장자리 근처에서 타일을 작게 만듭니다,Usa teselas más pequeñas cerca de los bordes,يستخدم بلاطًا أصغر قرب الحواف,Menggunakan ubin lebih kecil di dekat tepi
+Seed,,シード,Seed,种子,種子,시드,Semilla,البذرة,Seed
+SeedDescription,,タイル配置を決める固定値です,A fixed value that determines the tile placement,决定瓷砖排布的固定值,決定磁磚排布的固定值,타일 배치를 결정하는 고정값입니다,Valor fijo que determina la disposición de las teselas,قيمة ثابتة تحدد ترتيب البلاط,Nilai tetap yang menentukan susunan ubin
+Align,,整列,Align,对齐,對齊,정렬,Alineación,المحاذاة,Perataan
+AlignDescription,,エッジに沿った方向場へタイルを揃える度合いです,Degree to which tiles follow the edge-aligned direction field,瓷砖沿边缘方向场对齐的程度,磁磚沿邊緣方向場對齊的程度,가장자리를 따르는 방향장에 타일을 정렬하는 정도입니다,Grado en que las teselas siguen el campo de dirección alineado con los bordes,مدى اتباع البلاط لحقل الاتجاه المحاذي للحواف,Tingkat ubin mengikuti medan arah yang sejajar tepi
+EdgeDetect,,エッジ検出,Edge Detect,边缘检测,邊緣檢測,에지 검출,Detección de bordes,اكتشاف الحواف,Deteksi Tepi
+EdgeDetectDescription,,画像内部の輪郭を検出してタイルを沿わせる感度です,Sensitivity of detecting interior contours that tiles follow,检测图像内部轮廓并使瓷砖沿其排列的灵敏度,檢測圖像內部輪廓並使磁磚沿其排列的靈敏度,이미지 내부 윤곽을 검출해 타일을 따르게 하는 감도입니다,Sensibilidad de detección de contornos interiores que siguen las teselas,حساسية اكتشاف الحدود الداخلية التي يتبعها البلاط,Sensitivitas mendeteksi kontur dalam citra yang diikuti ubin
+Bevel,,立体感,Bevel,立体感,立體感,입체감,Relieve,النقش البارز,Relief
+BevelDescription,,タイル表面の陰影の強さです,Strength of the shading on tile surfaces,瓷砖表面阴影的强度,磁磚表面陰影的強度,타일 표면 음영의 강도입니다,Intensidad del sombreado en la superficie de las teselas,شدة التظليل على أسطح البلاط,Kekuatan bayangan pada permukaan ubin
+ColorVariation,,色むら,Color Variation,色差,色差,색 편차,Variación de color,تفاوت اللون,Variasi Warna
+ColorVariationDescription,,タイルごとの明るさのばらつきです,Per-tile variation of brightness,每块瓷砖亮度的差异,每塊磁磚亮度的差異,타일마다 밝기의 편차입니다,Variación de brillo por tesela,تفاوت السطوع لكل بلاطة,Variasi kecerahan tiap ubin
+GroutColor,,目地色,Grout Color,砖缝颜色,磚縫顏色,줄눈 색,Color de junta,لون الملاط,Warna Nat
+GroutColorDescription,,目地の色です,Color of the grout,砖缝的颜色,磚縫的顏色,줄눈의 색입니다,Color de la junta,لون الملاط,Warna nat
+GroutOpacity,,目地濃度,Grout Opacity,砖缝浓度,磚縫濃度,줄눈 농도,Opacidad de junta,شفافية الملاط,Opasitas Nat
+GroutOpacityDescription,,目地の不透明度です,Opacity of the grout,砖缝的不透明度,磚縫的不透明度,줄눈의 불투명도입니다,Opacidad de la junta,مدى عتامة الملاط,Opasitas nat
+QualityBalanced,,標準,Balanced,标准,標準,표준,Estándar,قياسي,Standar
+QualityBalancedDescription,,格子解像度と反復回数を抑えた設定です,Uses reduced grid resolution and iteration counts,降低网格分辨率与迭代次数的设置,降低網格解析度與迭代次數的設定,격자 해상도와 반복 횟수를 줄인 설정입니다,Configuración con resolución de cuadrícula e iteraciones reducidas,إعداد بدقة شبكة وعدد تكرارات مخفضين,Pengaturan dengan resolusi kisi dan iterasi yang dikurangi
+QualityHigh,,高品質,High,高品质,高品質,고품질,Alta,عالية,Tinggi
+QualityHighDescription,,品質と処理量の基準設定です,The reference balance of quality and cost,品质与处理量的基准设置,品質與處理量的基準設定,품질과 처리량의 기준 설정입니다,Configuración de referencia entre calidad y coste,الإعداد المرجعي للتوازن بين الجودة والتكلفة,Pengaturan acuan antara kualitas dan beban proses
+QualityUltra,,最高品質,Ultra,最高品质,最高品質,최고 품질,Máxima,قصوى,Ultra
+QualityUltraDescription,,最大の格子解像度と反復回数を使用します,Uses the largest grid resolution and iteration counts,使用最大的网格分辨率与迭代次数,使用最大的網格解析度與迭代次數,최대 격자 해상도와 반복 횟수를 사용합니다,Usa la mayor resolución de cuadrícula y el mayor número de iteraciones,يستخدم أكبر دقة شبكة وأكبر عدد من التكرارات,Menggunakan resolusi kisi dan jumlah iterasi terbesar
+TagMosaic,,モザイク,Mosaic,马赛克,馬賽克,모자이크,Mosaico,فسيفساء,Mosaik
+TagTile,,タイル,Tile,瓷砖,磁磚,타일,Tesela,بلاط,Ubin
+TagRoman,,ローマ風,Roman,罗马风,羅馬風,로마풍,Romano,روماني,Romawi
+UpdateAvailableMessage,,新しいバージョン {0} が公開されています。,A new version {0} is available.,新版本 {0} 已发布。,新版本 {0} 已發布。,새 버전 {0}이(가) 공개되었습니다.,La nueva versión {0} ya está disponible.,تم إصدار نسخة جديدة {0}.,Versi baru {0} telah dirilis.
