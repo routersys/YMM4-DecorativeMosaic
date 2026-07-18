@@ -24,26 +24,6 @@ internal readonly partial struct FillIntShader(
 
 [ThreadGroupSize(DefaultThreadGroupSizes.X)]
 [GeneratedComputeShaderDescriptor]
-internal readonly partial struct CopyIntShader(
-    ReadWriteBuffer<int> input,
-    ReadWriteBuffer<int> output,
-    int length) : IComputeShader
-{
-    private readonly ReadWriteBuffer<int> input = input;
-    private readonly ReadWriteBuffer<int> output = output;
-    private readonly int length = length;
-
-    public void Execute()
-    {
-        var index = ThreadIds.X;
-        if (index >= length)
-            return;
-        output[index] = input[index];
-    }
-}
-
-[ThreadGroupSize(DefaultThreadGroupSizes.X)]
-[GeneratedComputeShaderDescriptor]
 internal readonly partial struct InitScratchShader(
     ReadWriteBuffer<int> scratch) : IComputeShader
 {
@@ -346,11 +326,12 @@ internal readonly partial struct SpawnShader(
     ReadWriteBuffer<int> mask,
     ReadWriteBuffer<float> theta,
     ReadWriteBuffer<float> edgeDistance,
-    ReadWriteBuffer<float> sitePosX,
-    ReadWriteBuffer<float> sitePosY,
-    ReadWriteBuffer<float> siteTheta,
-    ReadWriteBuffer<float> siteSize,
+    ReadWriteBuffer<Float4> site,
+    ReadWriteBuffer<Float2> siteReference,
     ReadWriteBuffer<int> siteRank,
+    ReadWriteBuffer<int> sumX,
+    ReadWriteBuffer<int> sumY,
+    ReadWriteBuffer<int> count,
     ReadWriteBuffer<int> scratch,
     int gridWidth,
     int gridHeight,
@@ -362,11 +343,12 @@ internal readonly partial struct SpawnShader(
     private readonly ReadWriteBuffer<int> mask = mask;
     private readonly ReadWriteBuffer<float> theta = theta;
     private readonly ReadWriteBuffer<float> edgeDistance = edgeDistance;
-    private readonly ReadWriteBuffer<float> sitePosX = sitePosX;
-    private readonly ReadWriteBuffer<float> sitePosY = sitePosY;
-    private readonly ReadWriteBuffer<float> siteTheta = siteTheta;
-    private readonly ReadWriteBuffer<float> siteSize = siteSize;
+    private readonly ReadWriteBuffer<Float4> site = site;
+    private readonly ReadWriteBuffer<Float2> siteReference = siteReference;
     private readonly ReadWriteBuffer<int> siteRank = siteRank;
+    private readonly ReadWriteBuffer<int> sumX = sumX;
+    private readonly ReadWriteBuffer<int> sumY = sumY;
+    private readonly ReadWriteBuffer<int> count = count;
     private readonly ReadWriteBuffer<int> scratch = scratch;
     private readonly int gridWidth = gridWidth;
     private readonly int gridHeight = gridHeight;
@@ -383,6 +365,9 @@ internal readonly partial struct SpawnShader(
             return;
 
         var index = gy * gridWidth + gx;
+        sumX[index] = 0;
+        sumY[index] = 0;
+        count[index] = 0;
         if (mask[index] != 1)
         {
             siteRank[index] = -1;
@@ -400,10 +385,10 @@ internal readonly partial struct SpawnShader(
         }
 
         var center = DecorativeMosaicShaderMath.CellCenter(gx, gy, cellSize);
-        sitePosX[index] = center.X + (DecorativeMosaicShaderMath.Hash01(basis ^ 0xC2B2AE35u) - 0.5f) * cellSize;
-        sitePosY[index] = center.Y + (DecorativeMosaicShaderMath.Hash01(basis * 0x85EBCA6Bu + 0x9E3779B9u) - 0.5f) * cellSize;
-        siteTheta[index] = theta[index];
-        siteSize[index] = sizeFactor;
+        var positionX = center.X + (DecorativeMosaicShaderMath.Hash01(basis ^ 0xC2B2AE35u) - 0.5f) * cellSize;
+        var positionY = center.Y + (DecorativeMosaicShaderMath.Hash01(basis * 0x85EBCA6Bu + 0x9E3779B9u) - 0.5f) * cellSize;
+        site[index] = new Float4(positionX, positionY, theta[index], sizeFactor);
+        siteReference[index] = DecorativeMosaicShaderMath.OwnerReference(positionX, positionY, cellSize, gridWidth, gridHeight);
         siteRank[index] = Hlsl.Min(
             (int)(DecorativeMosaicShaderMath.Hash01(basis + 0x27D4EB2Fu) * DecorativeMosaicSettings.LayingSteps),
             DecorativeMosaicSettings.LayingSteps - 1);
@@ -415,16 +400,14 @@ internal readonly partial struct SpawnShader(
 [GeneratedComputeShaderDescriptor]
 internal readonly partial struct SiteSeedShader(
     ReadWriteBuffer<int> siteRank,
-    ReadWriteBuffer<float> sitePosX,
-    ReadWriteBuffer<float> sitePosY,
+    ReadWriteBuffer<Float4> site,
     ReadWriteBuffer<int> jumpFlood,
     int gridWidth,
     int gridHeight,
     float cellSize) : IComputeShader
 {
     private readonly ReadWriteBuffer<int> siteRank = siteRank;
-    private readonly ReadWriteBuffer<float> sitePosX = sitePosX;
-    private readonly ReadWriteBuffer<float> sitePosY = sitePosY;
+    private readonly ReadWriteBuffer<Float4> site = site;
     private readonly ReadWriteBuffer<int> jumpFlood = jumpFlood;
     private readonly int gridWidth = gridWidth;
     private readonly int gridHeight = gridHeight;
@@ -441,8 +424,9 @@ internal readonly partial struct SiteSeedShader(
         if (siteRank[index] < 0)
             return;
 
-        var cx = Hlsl.Clamp((int)(sitePosX[index] / cellSize), 0, gridWidth - 1);
-        var cy = Hlsl.Clamp((int)(sitePosY[index] / cellSize), 0, gridHeight - 1);
+        var packed = site[index];
+        var cx = Hlsl.Clamp((int)(packed.X / cellSize), 0, gridWidth - 1);
+        var cy = Hlsl.Clamp((int)(packed.Y / cellSize), 0, gridHeight - 1);
         Hlsl.InterlockedMin(ref jumpFlood[cy * gridWidth + cx], index);
     }
 }
@@ -452,10 +436,7 @@ internal readonly partial struct SiteSeedShader(
 internal readonly partial struct SiteJumpFloodPassShader(
     ReadWriteBuffer<int> input,
     ReadWriteBuffer<int> output,
-    ReadWriteBuffer<float> sitePosX,
-    ReadWriteBuffer<float> sitePosY,
-    ReadWriteBuffer<float> siteTheta,
-    ReadWriteBuffer<float> siteSize,
+    ReadWriteBuffer<Float4> site,
     int gridWidth,
     int gridHeight,
     int stepSize,
@@ -464,26 +445,24 @@ internal readonly partial struct SiteJumpFloodPassShader(
 {
     private readonly ReadWriteBuffer<int> input = input;
     private readonly ReadWriteBuffer<int> output = output;
-    private readonly ReadWriteBuffer<float> sitePosX = sitePosX;
-    private readonly ReadWriteBuffer<float> sitePosY = sitePosY;
-    private readonly ReadWriteBuffer<float> siteTheta = siteTheta;
-    private readonly ReadWriteBuffer<float> siteSize = siteSize;
+    private readonly ReadWriteBuffer<Float4> site = site;
     private readonly int gridWidth = gridWidth;
     private readonly int gridHeight = gridHeight;
     private readonly int stepSize = stepSize;
     private readonly float cellSize = cellSize;
     private readonly float gamma = gamma;
 
-    private float Distance(Float2 position, int site)
+    private float Distance(Float2 position, int candidate)
     {
-        var dx = position.X - sitePosX[site];
-        var dy = position.Y - sitePosY[site];
-        var angle = siteTheta[site];
+        var packed = site[candidate];
+        var dx = position.X - packed.X;
+        var dy = position.Y - packed.Y;
+        var angle = packed.Z;
         var c = Hlsl.Cos(angle);
         var s = Hlsl.Sin(angle);
         var u = c * dx + s * dy;
         var v = -s * dx + c * dy;
-        return (Hlsl.Abs(u) / gamma + Hlsl.Abs(v) * gamma) / Hlsl.Max(siteSize[site], 0.1f);
+        return (Hlsl.Abs(u) / gamma + Hlsl.Abs(v) * gamma) / Hlsl.Max(packed.W, 0.1f);
     }
 
     public void Execute()
@@ -505,7 +484,7 @@ internal readonly partial struct SiteJumpFloodPassShader(
                 if (sx < 0 || sx >= gridWidth || sy < 0 || sy >= gridHeight)
                     continue;
                 var candidate = input[sy * gridWidth + sx];
-                if (candidate == DecorativeMosaicSettings.SiteSentinel)
+                if (candidate == DecorativeMosaicSettings.SiteSentinel || candidate == best)
                     continue;
                 var distance = Distance(position, candidate);
                 if (distance < bestDistance)
@@ -525,8 +504,7 @@ internal readonly partial struct CentroidAccumulateShader(
     ReadWriteBuffer<int> siteMap,
     ReadWriteBuffer<int> mask,
     ReadWriteBuffer<float> edgeDistance,
-    ReadWriteBuffer<float> sitePosX,
-    ReadWriteBuffer<float> sitePosY,
+    ReadWriteBuffer<Float2> siteReference,
     ReadWriteBuffer<int> sumX,
     ReadWriteBuffer<int> sumY,
     ReadWriteBuffer<int> count,
@@ -539,8 +517,7 @@ internal readonly partial struct CentroidAccumulateShader(
     private readonly ReadWriteBuffer<int> siteMap = siteMap;
     private readonly ReadWriteBuffer<int> mask = mask;
     private readonly ReadWriteBuffer<float> edgeDistance = edgeDistance;
-    private readonly ReadWriteBuffer<float> sitePosX = sitePosX;
-    private readonly ReadWriteBuffer<float> sitePosY = sitePosY;
+    private readonly ReadWriteBuffer<Float2> siteReference = siteReference;
     private readonly ReadWriteBuffer<int> sumX = sumX;
     private readonly ReadWriteBuffer<int> sumY = sumY;
     private readonly ReadWriteBuffer<int> count = count;
@@ -566,11 +543,10 @@ internal readonly partial struct CentroidAccumulateShader(
         if (owner == DecorativeMosaicSettings.SiteSentinel)
             return;
 
-        var ownerCellX = Hlsl.Clamp((int)(sitePosX[owner] / cellSize), 0, gridWidth - 1);
-        var ownerCellY = Hlsl.Clamp((int)(sitePosY[owner] / cellSize), 0, gridHeight - 1);
+        var reference = siteReference[owner];
         var center = DecorativeMosaicShaderMath.CellCenter(gx, gy, cellSize);
-        var offsetX = center.X - (ownerCellX + 0.5f) * cellSize;
-        var offsetY = center.Y - (ownerCellY + 0.5f) * cellSize;
+        var offsetX = center.X - reference.X;
+        var offsetY = center.Y - reference.Y;
         if (Hlsl.Abs(offsetX) > cutoff || Hlsl.Abs(offsetY) > cutoff)
             return;
 
@@ -584,10 +560,8 @@ internal readonly partial struct CentroidAccumulateShader(
 [GeneratedComputeShaderDescriptor]
 internal readonly partial struct SiteMoveShader(
     ReadWriteBuffer<int> siteRank,
-    ReadWriteBuffer<float> sitePosX,
-    ReadWriteBuffer<float> sitePosY,
-    ReadWriteBuffer<float> siteTheta,
-    ReadWriteBuffer<float> siteSize,
+    ReadWriteBuffer<Float4> site,
+    ReadWriteBuffer<Float2> siteReference,
     ReadWriteBuffer<int> sumX,
     ReadWriteBuffer<int> sumY,
     ReadWriteBuffer<int> count,
@@ -601,10 +575,8 @@ internal readonly partial struct SiteMoveShader(
     float detail) : IComputeShader
 {
     private readonly ReadWriteBuffer<int> siteRank = siteRank;
-    private readonly ReadWriteBuffer<float> sitePosX = sitePosX;
-    private readonly ReadWriteBuffer<float> sitePosY = sitePosY;
-    private readonly ReadWriteBuffer<float> siteTheta = siteTheta;
-    private readonly ReadWriteBuffer<float> siteSize = siteSize;
+    private readonly ReadWriteBuffer<Float4> site = site;
+    private readonly ReadWriteBuffer<Float2> siteReference = siteReference;
     private readonly ReadWriteBuffer<int> sumX = sumX;
     private readonly ReadWriteBuffer<int> sumY = sumY;
     private readonly ReadWriteBuffer<int> count = count;
@@ -625,10 +597,15 @@ internal readonly partial struct SiteMoveShader(
             return;
 
         var index = gy * gridWidth + gx;
+        var cells = count[index];
+        var accumulatedX = sumX[index];
+        var accumulatedY = sumY[index];
+        sumX[index] = 0;
+        sumY[index] = 0;
+        count[index] = 0;
         if (siteRank[index] < 0)
             return;
 
-        var cells = count[index];
         if (cells == 0)
         {
             siteRank[index] = -1;
@@ -636,19 +613,16 @@ internal readonly partial struct SiteMoveShader(
             return;
         }
 
-        var ownerCellX = Hlsl.Clamp((int)(sitePosX[index] / cellSize), 0, gridWidth - 1);
-        var ownerCellY = Hlsl.Clamp((int)(sitePosY[index] / cellSize), 0, gridHeight - 1);
+        var reference = siteReference[index];
         var scale = 1f / (DecorativeMosaicSettings.FixedPointScale * cells);
-        var newX = Hlsl.Clamp((ownerCellX + 0.5f) * cellSize + sumX[index] * scale, 0f, gridWidth * cellSize - 0.001f);
-        var newY = Hlsl.Clamp((ownerCellY + 0.5f) * cellSize + sumY[index] * scale, 0f, gridHeight * cellSize - 0.001f);
-        sitePosX[index] = newX;
-        sitePosY[index] = newY;
+        var newX = Hlsl.Clamp(reference.X + accumulatedX * scale, 0f, gridWidth * cellSize - 0.001f);
+        var newY = Hlsl.Clamp(reference.Y + accumulatedY * scale, 0f, gridHeight * cellSize - 0.001f);
 
         var cellX = Hlsl.Clamp((int)(newX / cellSize), 0, gridWidth - 1);
         var cellY = Hlsl.Clamp((int)(newY / cellSize), 0, gridHeight - 1);
         var cell = cellY * gridWidth + cellX;
-        siteTheta[index] = theta[cell];
-        siteSize[index] = DecorativeMosaicShaderMath.SizeFactor(edgeDistance[cell], spacing, detail);
+        site[index] = new Float4(newX, newY, theta[cell], DecorativeMosaicShaderMath.SizeFactor(edgeDistance[cell], spacing, detail));
+        siteReference[index] = DecorativeMosaicShaderMath.OwnerReference(newX, newY, cellSize, gridWidth, gridHeight);
     }
 }
 
@@ -656,10 +630,7 @@ internal readonly partial struct SiteMoveShader(
 [GeneratedComputeShaderDescriptor]
 internal readonly partial struct RenderShader(
     ReadWriteBuffer<int> siteMap,
-    ReadWriteBuffer<float> sitePosX,
-    ReadWriteBuffer<float> sitePosY,
-    ReadWriteBuffer<float> siteTheta,
-    ReadWriteBuffer<float> siteSize,
+    ReadWriteBuffer<Float4> site,
     ReadWriteBuffer<int> siteRank,
     ReadWriteTexture2D<Bgra32, Float4> source,
     ReadWriteTexture2D<Bgra32, Float4> output,
@@ -685,10 +656,7 @@ internal readonly partial struct RenderShader(
     float groutOpacity) : IComputeShader
 {
     private readonly ReadWriteBuffer<int> siteMap = siteMap;
-    private readonly ReadWriteBuffer<float> sitePosX = sitePosX;
-    private readonly ReadWriteBuffer<float> sitePosY = sitePosY;
-    private readonly ReadWriteBuffer<float> siteTheta = siteTheta;
-    private readonly ReadWriteBuffer<float> siteSize = siteSize;
+    private readonly ReadWriteBuffer<Float4> site = site;
     private readonly ReadWriteBuffer<int> siteRank = siteRank;
     private readonly ReadWriteTexture2D<Bgra32, Float4> source = source;
     private readonly ReadWriteTexture2D<Bgra32, Float4> output = output;
@@ -744,16 +712,17 @@ internal readonly partial struct RenderShader(
                 if (sx < 0 || sx >= gridWidth || sy < 0 || sy >= gridHeight)
                     continue;
                 var candidate = siteMap[sy * gridWidth + sx];
-                if (candidate == DecorativeMosaicSettings.SiteSentinel)
+                if (candidate == DecorativeMosaicSettings.SiteSentinel || candidate == best)
                     continue;
-                var cdx = pxc - sitePosX[candidate];
-                var cdy = pyc - sitePosY[candidate];
-                var angle = siteTheta[candidate];
+                var packed = site[candidate];
+                var cdx = pxc - packed.X;
+                var cdy = pyc - packed.Y;
+                var angle = packed.Z;
                 var cc = Hlsl.Cos(angle);
                 var cs = Hlsl.Sin(angle);
                 var cu = cc * cdx + cs * cdy;
                 var cv = -cs * cdx + cc * cdy;
-                var distance = (Hlsl.Abs(cu) / gamma + Hlsl.Abs(cv) * gamma) / Hlsl.Max(siteSize[candidate], 0.1f);
+                var distance = (Hlsl.Abs(cu) / gamma + Hlsl.Abs(cv) * gamma) / Hlsl.Max(packed.W, 0.1f);
                 if (distance < bestDistance)
                 {
                     bestDistance = distance;
@@ -773,23 +742,24 @@ internal readonly partial struct RenderShader(
         var rc = Hlsl.Cos(rotation);
         var rs = Hlsl.Abs(Hlsl.Sin(rotation));
         var shrink = 1f / (rc + rs);
+        var bestSite = site[best];
         var sizeJitter = 1f - DecorativeMosaicSettings.SizeJitterFactor * irregularity * DecorativeMosaicShaderMath.Hash01(basis ^ 0x85EBCA6Bu);
-        var factor = siteSize[best] * shrink * sizeJitter;
+        var factor = bestSite.W * shrink * sizeJitter;
         var halfU = gamma * halfBase * factor;
         var halfV = halfBase / gamma * factor;
 
-        var tileAngle = siteTheta[best] + rotation;
+        var tileAngle = bestSite.Z + rotation;
         var tc2 = Hlsl.Cos(tileAngle);
         var ts2 = Hlsl.Sin(tileAngle);
-        var dx2 = pxc - sitePosX[best];
-        var dy2 = pyc - sitePosY[best];
+        var dx2 = pxc - bestSite.X;
+        var dy2 = pyc - bestSite.Y;
         var u = tc2 * dx2 + ts2 * dy2;
         var v = -ts2 * dx2 + tc2 * dy2;
 
         if (Hlsl.Abs(u) <= halfU && Hlsl.Abs(v) <= halfV)
         {
-            var tileX = Hlsl.Clamp((int)sitePosX[best], 0, sourceWidth - 1);
-            var tileY = Hlsl.Clamp((int)sitePosY[best], 0, sourceHeight - 1);
+            var tileX = Hlsl.Clamp((int)bestSite.X, 0, sourceWidth - 1);
+            var tileY = Hlsl.Clamp((int)bestSite.Y, 0, sourceHeight - 1);
             var tileSample = source[new Int2(tileX, tileY)];
             var tileAlpha = Hlsl.Max(tileSample.W, 1e-4f);
             var r = tileSample.X / tileAlpha;
@@ -824,6 +794,12 @@ internal static class DecorativeMosaicShaderMath
 {
     public static Float2 CellCenter(int i, int j, float cellSize)
         => new((i + 0.5f) * cellSize, (j + 0.5f) * cellSize);
+
+    public static Float2 OwnerReference(float x, float y, float cellSize, int gridWidth, int gridHeight)
+        => CellCenter(
+            Hlsl.Clamp((int)(x / cellSize), 0, gridWidth - 1),
+            Hlsl.Clamp((int)(y / cellSize), 0, gridHeight - 1),
+            cellSize);
 
     public static float SizeFactor(float edgeDistance, float spacing, float detail)
         => 1f - detail * (1f - DecorativeMosaicSettings.MinimumSizeFactor)

@@ -19,19 +19,15 @@ internal sealed class DecorativeMosaicPipeline : IDisposable
     private ReadWriteBuffer<int>? _jumpFloodA;
     private ReadWriteBuffer<int>? _jumpFloodB;
     private ReadWriteBuffer<int>? _siteMap;
-    private ReadWriteBuffer<float>? _sitePosX;
-    private ReadWriteBuffer<float>? _sitePosY;
-    private ReadWriteBuffer<float>? _siteTheta;
-    private ReadWriteBuffer<float>? _siteSize;
+    private ReadWriteBuffer<Float4>? _site;
+    private ReadWriteBuffer<Float2>? _siteReference;
     private ReadWriteBuffer<int>? _siteRank;
     private ReadWriteBuffer<int>? _sumX;
     private ReadWriteBuffer<int>? _sumY;
     private ReadWriteBuffer<int>? _count;
-    private ReadBackBuffer<float>? _posXReadBack;
-    private ReadBackBuffer<float>? _posYReadBack;
+    private ReadBackBuffer<Float4>? _siteReadBack;
     private ReadBackBuffer<int>? _rankReadBack;
-    private float[]? _cachedPosX;
-    private float[]? _cachedPosY;
+    private Float4[]? _cachedSites;
     private int[]? _cachedRank;
     private int _cachedSiteCount;
     private StructureKey? _structureKey;
@@ -153,15 +149,12 @@ internal sealed class DecorativeMosaicPipeline : IDisposable
         using (ComputeContext context = _device.CreateComputeContext())
             RecordGrowthStage(in context, in derived, in parameters);
         _scratchReadBack.CopyFrom(_scratch);
-        var posXReadBack = _posXReadBack!;
-        var posYReadBack = _posYReadBack!;
+        var siteReadBack = _siteReadBack!;
         var rankReadBack = _rankReadBack!;
-        posXReadBack.CopyFrom(_sitePosX!);
-        posYReadBack.CopyFrom(_sitePosY!);
+        siteReadBack.CopyFrom(_site!);
         rankReadBack.CopyFrom(_siteRank!);
         _cachedSiteCount = _scratchReadBack.Span[0];
-        posXReadBack.Span.CopyTo(_cachedPosX!);
-        posYReadBack.Span.CopyTo(_cachedPosY!);
+        siteReadBack.Span.CopyTo(_cachedSites!);
         rankReadBack.Span.CopyTo(_cachedRank!);
         BuildBoundsPrefix();
         _structureKey = key;
@@ -277,48 +270,43 @@ internal sealed class DecorativeMosaicPipeline : IDisposable
         context.Barrier(_edgeDistance!);
 
         context.For(gridWidth, gridHeight, new SpawnShader(
-            _mask!, _theta!, _edgeDistance!, _sitePosX!, _sitePosY!, _siteTheta!, _siteSize!, _siteRank!, _scratch,
+            _mask!, _theta!, _edgeDistance!, _site!, _siteReference!, _siteRank!,
+            _sumX!, _sumY!, _count!, _scratch,
             gridWidth, gridHeight, cellSize, derived.Spacing, parameters.Detail, parameters.Seed));
-        context.Barrier(_sitePosX!);
-        context.Barrier(_sitePosY!);
-        context.Barrier(_siteTheta!);
-        context.Barrier(_siteSize!);
+        context.Barrier(_site!);
+        context.Barrier(_siteReference!);
         context.Barrier(_siteRank!);
+        context.Barrier(_sumX!);
+        context.Barrier(_sumY!);
+        context.Barrier(_count!);
         context.Barrier(_scratch);
 
         for (var iteration = 0; iteration < derived.Iterations; iteration++)
         {
-            RecordSiteVoronoi(in context, in derived, out reading);
-            context.For(gridLength, new FillIntShader(_sumX!, gridLength, 0));
-            context.For(gridLength, new FillIntShader(_sumY!, gridLength, 0));
-            context.For(gridLength, new FillIntShader(_count!, gridLength, 0));
-            context.Barrier(_sumX!);
-            context.Barrier(_sumY!);
-            context.Barrier(_count!);
+            RecordSiteVoronoi(in context, in derived);
             var avoidWidth = iteration < derived.Iterations - DecorativeMosaicSettings.OpenIterations ? derived.AvoidWidth : 0f;
             context.For(gridWidth, gridHeight, new CentroidAccumulateShader(
-                reading, _mask!, _edgeDistance!, _sitePosX!, _sitePosY!, _sumX!, _sumY!, _count!,
+                _siteMap!, _mask!, _edgeDistance!, _siteReference!, _sumX!, _sumY!, _count!,
                 gridWidth, gridHeight, cellSize, avoidWidth, derived.Cutoff));
             context.Barrier(_sumX!);
             context.Barrier(_sumY!);
             context.Barrier(_count!);
             context.For(gridWidth, gridHeight, new SiteMoveShader(
-                _siteRank!, _sitePosX!, _sitePosY!, _siteTheta!, _siteSize!, _sumX!, _sumY!, _count!,
+                _siteRank!, _site!, _siteReference!, _sumX!, _sumY!, _count!,
                 _theta!, _edgeDistance!, _scratch, gridWidth, gridHeight, cellSize, derived.Spacing, parameters.Detail));
-            context.Barrier(_sitePosX!);
-            context.Barrier(_sitePosY!);
-            context.Barrier(_siteTheta!);
-            context.Barrier(_siteSize!);
+            context.Barrier(_site!);
+            context.Barrier(_siteReference!);
             context.Barrier(_siteRank!);
+            context.Barrier(_sumX!);
+            context.Barrier(_sumY!);
+            context.Barrier(_count!);
         }
 
-        RecordSiteVoronoi(in context, in derived, out reading);
-        context.For(gridLength, new CopyIntShader(reading, _siteMap!, gridLength));
-        context.Barrier(_siteMap!);
+        RecordSiteVoronoi(in context, in derived);
         context.Barrier(_scratch);
     }
 
-    private void RecordSiteVoronoi(in ComputeContext context, in DerivedValues derived, out ReadWriteBuffer<int> result)
+    private void RecordSiteVoronoi(in ComputeContext context, in DerivedValues derived)
     {
         var gridWidth = _gridWidth;
         var gridHeight = _gridHeight;
@@ -326,21 +314,21 @@ internal sealed class DecorativeMosaicPipeline : IDisposable
         context.For(gridLength, new FillIntShader(_jumpFloodA!, gridLength, DecorativeMosaicSettings.SiteSentinel));
         context.Barrier(_jumpFloodA!);
         context.For(gridWidth, gridHeight, new SiteSeedShader(
-            _siteRank!, _sitePosX!, _sitePosY!, _jumpFloodA!, gridWidth, gridHeight, derived.CellSize));
+            _siteRank!, _site!, _jumpFloodA!, gridWidth, gridHeight, derived.CellSize));
         context.Barrier(_jumpFloodA!);
         var reading = _jumpFloodA!;
         var writing = _jumpFloodB!;
         var stepSize = InitialJumpFloodStep(gridWidth, gridHeight);
         while (stepSize >= 1)
         {
+            var target = stepSize == 1 ? _siteMap! : writing;
             context.For(gridWidth, gridHeight, new SiteJumpFloodPassShader(
-                reading, writing, _sitePosX!, _sitePosY!, _siteTheta!, _siteSize!,
+                reading, target, _site!,
                 gridWidth, gridHeight, stepSize, derived.CellSize, derived.Gamma));
-            context.Barrier(writing);
-            (reading, writing) = (writing, reading);
+            context.Barrier(target);
+            (reading, writing) = (target, reading);
             stepSize >>= 1;
         }
-        result = reading;
     }
 
     private void RecordRenderStage(
@@ -354,7 +342,7 @@ internal sealed class DecorativeMosaicPipeline : IDisposable
         in Parameters parameters)
     {
         context.For(rect.Width, rect.Height, new RenderShader(
-            _siteMap!, _sitePosX!, _sitePosY!, _siteTheta!, _siteSize!, _siteRank!, source, output,
+            _siteMap!, _site!, _siteRank!, source, output,
             rect.X, rect.Y, rect.Width, rect.Height, _gridWidth, _gridHeight,
             canvasWidth, canvasHeight, derived.CellSize, derived.Gamma, derived.HalfBase,
             DecorativeMosaicSettings.GetVisibleCount(parameters.Laying), parameters.Seed,
@@ -385,15 +373,14 @@ internal sealed class DecorativeMosaicPipeline : IDisposable
         }
 
         var ranks = _cachedRank!;
-        var posX = _cachedPosX!;
-        var posY = _cachedPosY!;
+        var sites = _cachedSites!;
         for (var index = 0; index < ranks.Length; index++)
         {
             var rank = ranks[index];
             if (rank < 0 || rank >= DecorativeMosaicSettings.LayingSteps)
                 continue;
-            var x = posX[index];
-            var y = posY[index];
+            var x = sites[index].X;
+            var y = sites[index].Y;
             if (x < _boundsMinX[rank])
                 _boundsMinX[rank] = x;
             if (x > _boundsMaxX[rank])
@@ -451,19 +438,15 @@ internal sealed class DecorativeMosaicPipeline : IDisposable
         _jumpFloodA = _device.AllocateReadWriteBuffer<int>(gridLength);
         _jumpFloodB = _device.AllocateReadWriteBuffer<int>(gridLength);
         _siteMap = _device.AllocateReadWriteBuffer<int>(gridLength);
-        _sitePosX = _device.AllocateReadWriteBuffer<float>(gridLength);
-        _sitePosY = _device.AllocateReadWriteBuffer<float>(gridLength);
-        _siteTheta = _device.AllocateReadWriteBuffer<float>(gridLength);
-        _siteSize = _device.AllocateReadWriteBuffer<float>(gridLength);
+        _site = _device.AllocateReadWriteBuffer<Float4>(gridLength);
+        _siteReference = _device.AllocateReadWriteBuffer<Float2>(gridLength);
         _siteRank = _device.AllocateReadWriteBuffer<int>(gridLength);
         _sumX = _device.AllocateReadWriteBuffer<int>(gridLength);
         _sumY = _device.AllocateReadWriteBuffer<int>(gridLength);
         _count = _device.AllocateReadWriteBuffer<int>(gridLength);
-        _posXReadBack = _device.AllocateReadBackBuffer<float>(gridLength);
-        _posYReadBack = _device.AllocateReadBackBuffer<float>(gridLength);
+        _siteReadBack = _device.AllocateReadBackBuffer<Float4>(gridLength);
         _rankReadBack = _device.AllocateReadBackBuffer<int>(gridLength);
-        _cachedPosX = new float[gridLength];
-        _cachedPosY = new float[gridLength];
+        _cachedSites = new Float4[gridLength];
         _cachedRank = new int[gridLength];
         _cachedSiteCount = 0;
         _gridWidth = gridWidth;
@@ -492,16 +475,13 @@ internal sealed class DecorativeMosaicPipeline : IDisposable
         _jumpFloodA?.Dispose();
         _jumpFloodB?.Dispose();
         _siteMap?.Dispose();
-        _sitePosX?.Dispose();
-        _sitePosY?.Dispose();
-        _siteTheta?.Dispose();
-        _siteSize?.Dispose();
+        _site?.Dispose();
+        _siteReference?.Dispose();
         _siteRank?.Dispose();
         _sumX?.Dispose();
         _sumY?.Dispose();
         _count?.Dispose();
-        _posXReadBack?.Dispose();
-        _posYReadBack?.Dispose();
+        _siteReadBack?.Dispose();
         _rankReadBack?.Dispose();
         _mask = null;
         _luminance = null;
@@ -510,19 +490,15 @@ internal sealed class DecorativeMosaicPipeline : IDisposable
         _jumpFloodA = null;
         _jumpFloodB = null;
         _siteMap = null;
-        _sitePosX = null;
-        _sitePosY = null;
-        _siteTheta = null;
-        _siteSize = null;
+        _site = null;
+        _siteReference = null;
         _siteRank = null;
         _sumX = null;
         _sumY = null;
         _count = null;
-        _posXReadBack = null;
-        _posYReadBack = null;
+        _siteReadBack = null;
         _rankReadBack = null;
-        _cachedPosX = null;
-        _cachedPosY = null;
+        _cachedSites = null;
         _cachedRank = null;
         _cachedSiteCount = 0;
         _structureKey = null;
